@@ -2,13 +2,14 @@ from bs4 import BeautifulSoup
 import requests
 from time import sleep 
 import csv, sys, os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 headers = {
     'Accept': '*/*',  
     'User-Agent' :'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
 }
-
-mode = sys.argv[1] if len(sys.argv) > 1 else os.getenv('PARSING_MODE', 'partial') # default mode - partial
 
 # possible rows names
 
@@ -22,7 +23,7 @@ all_row_name = [first_row_name, second_row_name, third_row_name, fourth_row_name
 
 filename = 'result' # default filename
 
-def get_info_each_event(src):
+def get_info_each_event(src, sleep_pause):
     global filename 
 
     soup_each_event = BeautifulSoup(src, 'lxml')
@@ -93,46 +94,46 @@ def get_info_each_event(src):
         )
 
     print('success')
-    sleep(0.1)
+    sleep(sleep_pause)
 
-def pars_full_page(url):
-    req_main = requests.get(url, headers=headers)
+def pars_full_page(url, sleep_pause):
+    req_main = requests.get(url, headers=headers, proxies=proxies)
     soup_main = BeautifulSoup(req_main.text, 'lxml')
 
     all_cards = soup_main.find_all(class_ = 'b-postcard') 
 
     for card in all_cards: 
         url_each_event = card.find('h2', class_ = 'title').find('a').get('href')
-        req_each_event = requests.get(url_each_event, headers=headers)
+        req_each_event = requests.get(url_each_event, headers=headers, proxies=proxies)
 
-        get_info_each_event(req_each_event.text)
+        get_info_each_event(req_each_event.text, sleep_pause)
 
 
-def get_count_page():
+def get_count_page(sleep_pause):
     
     # automatic calculation of pages in the archive
     url_archive = 'https://dou.ua/calendar/archive/'
-    req_archive = requests.get(url_archive, headers=headers)
+    req_archive = requests.get(url_archive, headers=headers, proxies=proxies)
     soup_archive = BeautifulSoup(req_archive.text, 'lxml')
     count_archive_page = int(soup_archive.find(class_ = 'b-paging').find_all(class_ = 'page')[-1].text)
 
     for num in range(1, count_archive_page+1):
-        pars_full_page(f'https://dou.ua/calendar/archive/{num}/')
+        pars_full_page(f'https://dou.ua/calendar/archive/{num}/', sleep_pause)
     
     # for num in range(50, 0, -1):   # number of pages in archive
-    #     pars_full_page(f'https://dou.ua/calendar/archive/{num}/')
+    #     pars_full_page(f'https://dou.ua/calendar/archive/{num}/', sleep_pause)
 
     url = 'https://dou.ua/calendar'
 
-    req = requests.get(url, headers=headers)
+    req = requests.get(url, headers=headers, proxies=proxies)
     soup = BeautifulSoup(req.text, 'lxml')
     count_page = int(soup.find(class_ = 'b-paging').find_all(class_ = 'page')[-1].text)
 
     for num in range(1, count_page+1):
-        pars_full_page(f'https://dou.ua/calendar/page-{num}/')
+        pars_full_page(f'https://dou.ua/calendar/page-{num}/', sleep_pause)
 
 
-def start_program(flname='result'):
+def start_program(flname, sleep_pause):
     global filename
     filename = flname
 
@@ -151,16 +152,29 @@ def start_program(flname='result'):
                 'Views count'
             ]
         )
+    if isinstance(sleep_pause, str):
+        try:
+            sleep_pause = int(sleep_pause)
+        except Exception:
+            sleep_pause = 0.1 
 
-    if mode == 'partial':
-        pars_full_page(f'https://dou.ua/calendar/page-1/')
+    if mode == 'True':
+        pars_full_page(f'https://dou.ua/calendar/page-1/', sleep_pause)
 
-    elif mode == 'full':
-        get_count_page()
-
+    elif mode == 'False':
+        get_count_page(sleep_pause)
     else:
         print('unknown mode')
 
+if __name__ == '__main__':
+    flname = os.getenv('FILENAME', 'result')
+    sleep_pause = float(os.getenv('SLEEP_PAUSE', 0.1))
+    proxy = os.getenv("PROXY", None)
+
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    mode = os.getenv('TEST_MODE', False) # default mode - full
+
+    start_program(flname=flname, sleep_pause=sleep_pause)
 
 
-start_program('result_calendar')
+
