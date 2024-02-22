@@ -2,9 +2,13 @@ from bs4 import BeautifulSoup
 import requests
 from time import sleep 
 import csv, sys, os
+from sqlalchemy.orm import sessionmaker
+from event_models import Event, engine
 from dotenv import load_dotenv
 
 load_dotenv()
+Session = sessionmaker(bind=engine)
+session = Session()
 
 headers = {
     'Accept': '*/*',  
@@ -93,6 +97,19 @@ def get_info_each_event(src, sleep_pause):
         )
         )
 
+    event = Event(
+        title=title,
+        img=img,
+        date=res[0],
+        time=res[1],
+        place=res[2],
+        price=res[3],
+        attendees=','.join(res[4]) if len(res) == 5 else ''
+    )
+
+    session.add(event)
+    session.commit()
+
     print('success')
     sleep(sleep_pause)
 
@@ -166,6 +183,10 @@ def start_program(flname, sleep_pause):
     else:
         print('unknown mode')
 
+    events = session.query(Event).all()
+    for event in events:
+        print(event.title, event.date, event.time)
+
 if __name__ == '__main__':
     flname = os.getenv('FILENAME', 'result')
     sleep_pause = float(os.getenv('SLEEP_PAUSE', 0.1))
@@ -175,6 +196,3 @@ if __name__ == '__main__':
     mode = os.getenv('TEST_MODE', False) # default mode - full
 
     start_program(flname=flname, sleep_pause=sleep_pause)
-
-
-
