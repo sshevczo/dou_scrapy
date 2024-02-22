@@ -1,10 +1,12 @@
 from bs4 import BeautifulSoup
 import requests
+import dateparser
 from time import sleep 
 import csv, sys, os
 from sqlalchemy.orm import sessionmaker
 from event_models import Event, engine
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 Session = sessionmaker(bind=engine)
@@ -34,7 +36,9 @@ def get_info_each_event(src, sleep_pause):
     title = soup_each_event.find('div', class_ = 'page-head').find('h1').text
 
     try:
-        img = soup_each_event.find('img', class_ = 'event-info-logo').get('src')
+        img = soup_each_event.find('img', class_ = 'event-info-logo').get('src').split('/')[-2:]
+        url_img = '/'.join(img)
+        
     except Exception:
         img = ''
 
@@ -80,15 +84,29 @@ def get_info_each_event(src, sleep_pause):
         tags = ''
 
     page_views_count = soup_each_event.find('div', class_ = 'b-post-tags').find('span', class_ = 'pageviews').text
+    
+    date_time = res[0] + ' ' + res[1] if res[0] and res[1] else ''
+    if date_time:
+        date_time_obj = dateparser.parse(date_time)
+        if date_time_obj is not None:
+            unix_timestamp = int(date_time_obj.timestamp())
+        else:
+            unix_timestamp = 0  # Или любое другое значение по умолчанию, если дата и время не распознаны
+    else:
+        unix_timestamp = 0  # Или любое другое значение по умолчанию, если строка даты и времени пустая # Или любое другое значение по умолчанию, если дата и время не распознаны
+    
+    date_time = datetime.fromtimestamp(unix_timestamp)
+    # formatted_date_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
+    
+    print(date_time)
 
     with open(f'result/{filename}.csv', 'a', encoding='utf-8', newline='') as file:
         writer = csv.writer(file)
         writer.writerow (
             (
                 title,
-                img,     
-                res[0],  # d]ay
-                res[1],  # time
+                url_img,
+                date_time, # time
                 res[2],  # place
                 res[3],  # price
                 ', '.join(res[4]) if len(res) == 5 else '', # attendees
@@ -99,12 +117,11 @@ def get_info_each_event(src, sleep_pause):
 
     event = Event(
         title=title,
-        img=img,
-        date=res[0],
-        time=res[1],
+        img=url_img,
+        date_time=date_time,
         place=res[2],
         price=res[3],
-        attendees=','.join(res[4]) if len(res) == 5 else ''
+        attendees=len(res[4]) if len(res) == 5 else ''
     )
 
     session.add(event)
@@ -160,8 +177,8 @@ def start_program(flname, sleep_pause):
             [
                 'Event name',
                 'Image',
-                'Date',
-                'Time',
+                'DateTime',
+                
                 'Place',
                 'Price',
                 'Attendees',
@@ -185,7 +202,7 @@ def start_program(flname, sleep_pause):
 
     events = session.query(Event).all()
     for event in events:
-        print(event.title, event.date, event.time)
+        print(event.title, event.date_time)
 
 if __name__ == '__main__':
     flname = os.getenv('FILENAME', 'result')
